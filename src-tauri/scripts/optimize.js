@@ -7,8 +7,6 @@
 
   // --- 1. Block telemetry, analytics, and unnecessary scripts ---
   const BLOCKED_URLS = [
-    '/api/stats/watchtime',
-    '/api/stats/playback',
     '/api/stats/ads',
     '/ptracking',
     '/youtubei/v1/log_event',
@@ -24,16 +22,11 @@
     '/generate_204',
     '/api/stats/qoe',
     '/api/stats/atr',
-    // Cast/Remote (Chromecast — unnecessary in native app)
-    'cast_sender',
-    'cast.framework',
+    // Cast/Remote
     'www.gstatic.com/cast',
     'www.gstatic.com/eureka',
-    // Notifications (we have native ones)
-    '/notifications',
-    // Offline/SW
-    '/sw.js',
-    '/offline',
+    // SW
+    '/sw.js_data',
   ];
 
   const originalFetch = window.fetch;
