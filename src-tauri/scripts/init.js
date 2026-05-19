@@ -145,62 +145,10 @@
   }
 
   // ==========================================================
-  // HIGH QUALITY AUDIO — force 256kbps AAC
+  // HIGH QUALITY AUDIO — DISABLED
+  // setPlaybackQualityRange was causing playback stalls
+  // YouTube Music handles quality automatically based on subscription
   // ==========================================================
-
-  function forceHighQuality() {
-    const player = document.querySelector('#movie_player');
-    if (!player) return;
-
-    // Use internal API to set quality to highest available
-    if (player.setPlaybackQualityRange) {
-      player.setPlaybackQualityRange('hd1080', 'hd1080');
-    }
-
-    // Access the audio quality setting via YouTube Music's internal config
-    // The player uses adaptive streaming — we want the highest audio bitrate
-    if (player.getAvailableQualityLevels) {
-      const levels = player.getAvailableQualityLevels();
-      if (levels.length > 0) {
-        player.setPlaybackQualityRange(levels[0], levels[0]);
-      }
-    }
-  }
-
-  // Force high quality on every new song
-  function watchForNewSongs() {
-    const playerBar = document.querySelector('ytmusic-player-bar');
-    if (playerBar) {
-      new MutationObserver(() => {
-        setTimeout(forceHighQuality, 500);
-      }).observe(playerBar, { childList: true, subtree: true });
-    } else {
-      setTimeout(watchForNewSongs, 1000);
-    }
-  }
-
-  // Also intercept the player config to force high quality
-  // YouTube Music uses `yt.config_` for player settings
-  function patchPlayerConfig() {
-    // Override the audio quality preference in localStorage
-    try {
-      const prefs = JSON.parse(localStorage.getItem('yt-player-quality') || '{}');
-      prefs.data = JSON.stringify({ quality: 'hd1080', previousQuality: 'hd1080' });
-      localStorage.setItem('yt-player-quality', JSON.stringify(prefs));
-    } catch(e) {}
-
-    // Set the streaming quality cookie/preference
-    try {
-      const config = document.querySelector('ytmusic-app')?.playerApi_;
-      if (config?.setPlaybackQualityRange) {
-        config.setPlaybackQualityRange('hd1080', 'hd1080');
-      }
-    } catch(e) {}
-  }
-
-  setTimeout(forceHighQuality, 3000);
-  setTimeout(patchPlayerConfig, 4000);
-  watchForNewSongs();
 
   // ==========================================================
   // MEDIA INFO → Rust
