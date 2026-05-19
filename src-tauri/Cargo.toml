@@ -1,6 +1,6 @@
 [package]
 name = "yt-music-client"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [build-dependencies]
@@ -8,12 +8,10 @@ tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
 tauri = { version = "2.0", features = [] }
-tauri-plugin-window-state = "2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-souvlaki = "0.8"
-cocoa = "0.26"
-objc = "0.2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 
 [profile.release]
 panic = "abort"

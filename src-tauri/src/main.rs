@@ -1,123 +1,140 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![allow(deprecated)]
 
-use tauri::{TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
-use tauri::webview::Color;
+use serde_json::{json, Value};
 
-mod media;
+const INNERTUBE_API_URL: &str = "https://music.youtube.com/youtubei/v1/player?prettyPrint=false";
 
-const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15";
+async fn get_audio_stream_url(video_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
 
-const INIT_SCRIPT: &str = include_str!("../scripts/init.js");
-const OPTIMIZE_SCRIPT: &str = include_str!("../scripts/optimize.js");
-const PLUGINS_SCRIPT: &str = include_str!("../scripts/plugins.js");
+    let body = json!({
+        "videoId": video_id,
+        "context": {
+            "client": {
+                "clientName": "IOS",
+                "clientVersion": "19.29.1",
+                "hl": "en",
+                "gl": "US",
+                "deviceMake": "Apple",
+                "deviceModel": "iPhone16,2",
+                "osName": "iPhone",
+                "osVersion": "17.5.1"
+            }
+        }
+    });
 
-#[cfg(debug_assertions)]
-const PERF_MONITOR: &str = include_str!("../scripts/perf-monitor.js");
+    let resp = client
+        .post(INNERTUBE_API_URL)
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "com.google.ios.youtubemusic/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)")
+        .json(&body)
+        .send()
+        .await?
+        .json::<Value>()
+        .await?;
 
-const AD_DOMAINS: &[&str] = &[
-    "doubleclick.net",
-    "googlesyndication.com",
-    "googleadservices.com",
-    "youtube.com/pagead",
-    "youtube.com/get_midroll",
-    "googleads.g.doubleclick.net",
-    "static.doubleclick.net",
-    "ad.youtube.com",
-    "ads.youtube.com",
-    "pagead2.googlesyndication.com",
-];
+    // Find the best audio stream
+    let formats = resp["streamingData"]["adaptiveFormats"]
+        .as_array()
+        .ok_or("No adaptive formats found")?;
 
-const ALLOWED_DOMAINS: &[&str] = &[
-    "music.youtube.com",
-    "www.youtube.com",
-    "youtube.com",
-    "accounts.google.com",
-    "accounts.youtube.com",
-    "consent.youtube.com",
-    "consent.google.com",
-    "myaccount.google.com",
-    "www.google.com",
-    "www.gstatic.com",
-    "gstatic.com",
-    "googlevideo.com",
-    "googleapis.com",
-    "googleusercontent.com",
-    "ytimg.com",
-    "ggpht.com",
-    "youtube-nocookie.com",
-];
+    // Find audio-only stream with highest bitrate
+    let audio_stream = formats
+        .iter()
+        .filter(|f| {
+            f["mimeType"]
+                .as_str()
+                .map(|m| m.starts_with("audio/"))
+                .unwrap_or(false)
+        })
+        .max_by_key(|f| f["bitrate"].as_u64().unwrap_or(0))
+        .ok_or("No audio stream found")?;
 
-fn is_ad_url(url: &str) -> bool {
-    AD_DOMAINS.iter().any(|domain| url.contains(domain))
-}
+    let url = audio_stream["url"]
+        .as_str()
+        .ok_or("No URL in audio stream")?;
 
-fn is_allowed_url(url: &str) -> bool {
-    ALLOWED_DOMAINS.iter().any(|domain| url.contains(domain))
+    let bitrate = audio_stream["bitrate"].as_u64().unwrap_or(0);
+    let mime = audio_stream["mimeType"].as_str().unwrap_or("unknown");
+
+    println!("[Native Player] Found audio stream:");
+    println!("  Bitrate: {} kbps", bitrate / 1000);
+    println!("  Format: {}", mime);
+
+    Ok(url.to_string())
 }
 
 #[tauri::command]
-fn update_media(title: String, artist: String, is_playing: bool) {
-    media::update(title, artist, is_playing);
+async fn play_track(video_id: String) -> Result<String, String> {
+    match get_audio_stream_url(&video_id).await {
+        Ok(url) => {
+            println!("[Native Player] Stream URL obtained, playing via afplay...");
+            // PoC: use macOS afplay to play the stream
+            // In production this would use AVPlayer
+            tokio::spawn(async move {
+                let output = tokio::process::Command::new("afplay")
+                    .arg(&url)
+                    .output()
+                    .await;
+                match output {
+                    Ok(o) => {
+                        if !o.status.success() {
+                            eprintln!("[Native Player] afplay error: {}", String::from_utf8_lossy(&o.stderr));
+                        }
+                    }
+                    Err(e) => eprintln!("[Native Player] Failed to spawn afplay: {}", e),
+                }
+            });
+            Ok("Playing".to_string())
+        }
+        Err(e) => Err(format!("Failed to get stream: {}", e)),
+    }
+}
+
+#[tauri::command]
+async fn search_track(query: String) -> Result<Value, String> {
+    let client = reqwest::Client::new();
+
+    let body = json!({
+        "query": query,
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240101.01.00",
+                "hl": "en",
+                "gl": "US"
+            }
+        }
+    });
+
+    let resp = client
+        .post("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(resp)
 }
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_window_state::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![update_media])
+        .invoke_handler(tauri::generate_handler![play_track, search_track])
         .setup(|app| {
-            let handle = app.handle().clone();
-
-            let window = WebviewWindowBuilder::new(
+            let _window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::External("https://music.youtube.com".parse().unwrap()),
+                tauri::WebviewUrl::App("index.html".into()),
             )
-            .title("YouTube Music")
-            .inner_size(1280.0, 800.0)
-            .min_inner_size(600.0, 400.0)
+            .title("YT Music — Native Player PoC")
+            .inner_size(400.0, 300.0)
             .center()
-            .hidden_title(true)
-            .title_bar_style(TitleBarStyle::Transparent)
-            .background_color(Color(3, 3, 3, 255))
-            .visible(false)
-            .user_agent(USER_AGENT)
-            .initialization_script(INIT_SCRIPT)
-            .initialization_script(OPTIMIZE_SCRIPT)
-            .initialization_script(PLUGINS_SCRIPT)
-            .on_navigation(|url| {
-                let s = url.as_str();
-                !is_ad_url(s)
-            })
             .build()?;
-
-            // Set native dark background color (#030303) via cocoa
-            use cocoa::appkit::{NSColor, NSWindow};
-            use cocoa::base::{id, nil};
-
-            let ns_window = window.ns_window().unwrap() as id;
-            unsafe {
-                let bg_color = NSColor::colorWithRed_green_blue_alpha_(
-                    nil,
-                    3.0 / 255.0,
-                    3.0 / 255.0,
-                    3.0 / 255.0,
-                    1.0,
-                );
-                ns_window.setBackgroundColor_(bg_color);
-            }
-
-            media::init(handle);
-
-            // Debug: inject performance monitor
-            #[cfg(debug_assertions)]
-            {
-                let w = window.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(3));
-                    w.eval(PERF_MONITOR).ok();
-                });
-            }
 
             Ok(())
         })
