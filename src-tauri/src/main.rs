@@ -2,6 +2,7 @@
 #![allow(deprecated)]
 
 use tauri::{TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
+use tauri::webview::Color;
 
 mod media;
 
@@ -76,6 +77,7 @@ fn main() {
             .center()
             .hidden_title(true)
             .title_bar_style(TitleBarStyle::Transparent)
+            .background_color(Color(3, 3, 3, 255))
             .visible(false)
             .user_agent(USER_AGENT)
             .initialization_script(INIT_SCRIPT)

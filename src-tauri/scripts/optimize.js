@@ -3,20 +3,37 @@
 
   // ==========================================================
   // SAFE PERFORMANCE OPTIMIZATIONS
-  // Only non-destructive changes — never remove/hide DOM content
   // ==========================================================
 
-  // --- 1. Block telemetry and analytics (network only) ---
+  // --- 1. Block telemetry, analytics, and unnecessary scripts ---
   const BLOCKED_URLS = [
     '/api/stats/watchtime',
     '/api/stats/playback',
+    '/api/stats/ads',
     '/ptracking',
     '/youtubei/v1/log_event',
     '/youtubei/v1/feedback',
+    '/youtubei/v1/att/get',
     'play.google.com/log',
     'jnn-pa.googleapis.com',
     'www.google-analytics.com',
     'www.googletagmanager.com',
+    'googleads.g.doubleclick.net',
+    'static.doubleclick.net',
+    'pagead2.googlesyndication.com',
+    '/generate_204',
+    '/api/stats/qoe',
+    '/api/stats/atr',
+    // Cast/Remote (Chromecast — unnecessary in native app)
+    'cast_sender',
+    'cast.framework',
+    'www.gstatic.com/cast',
+    'www.gstatic.com/eureka',
+    // Notifications (we have native ones)
+    '/notifications',
+    // Offline/SW
+    '/sw.js',
+    '/offline',
   ];
 
   const originalFetch = window.fetch;
@@ -39,6 +56,24 @@
     return originalXHRSend.call(this, ...args);
   };
 
+  // Block script elements loading unnecessary resources
+  const scriptObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.tagName === 'SCRIPT' && node.src) {
+          const src = node.src;
+          if (src.includes('cast_sender') ||
+              src.includes('cast.framework') ||
+              src.includes('remote_module') ||
+              src.includes('www.gstatic.com/cast')) {
+            node.type = 'javascript/blocked';
+            node.remove();
+          }
+        }
+      }
+    }
+  });
+
   // --- 2. Disable Service Workers ---
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(regs => {
@@ -47,19 +82,22 @@
     navigator.serviceWorker.register = () => Promise.reject(new Error('disabled'));
   }
 
-  // --- 3. CSS-only performance (no DOM manipulation) ---
+  // --- 3. Disable Web Notifications (we use native) ---
+  window.Notification = { permission: 'denied', requestPermission: () => Promise.resolve('denied') };
+
+  // --- 4. CSS performance ---
   const perfStyle = document.createElement('style');
   perfStyle.textContent = `
-    /* Prevent layout thrashing on menu items */
+    /* Prevent layout thrashing */
     ytmusic-menu-renderer .menu-items {
       overflow: hidden !important;
       contain: layout style !important;
     }
-    /* CSS containment for heavy sections */
+    /* CSS containment */
     ytmusic-section-list-renderer {
       contain: content;
     }
-    /* content-visibility for list items (browser skips off-screen rendering) */
+    /* content-visibility for off-screen items */
     ytmusic-responsive-list-item-renderer,
     ytmusic-two-row-item-renderer {
       content-visibility: auto;
@@ -69,12 +107,12 @@
       content-visibility: auto;
       contain-intrinsic-size: auto 250px;
     }
-    /* Faster transitions (not disabled, just snappier) */
+    /* Snappier transitions */
     ytmusic-browse-response *,
     ytmusic-section-list-renderer * {
       transition-duration: 0.1s !important;
     }
-    /* Keep player animations untouched */
+    /* Keep player smooth */
     ytmusic-player-bar *,
     .middle-controls *,
     .slider *,
@@ -84,8 +122,12 @@
   `;
   document.head.appendChild(perfStyle);
 
-  // --- 4. Lazy-load images that are far off-screen (non-destructive) ---
-  // Only adds loading="lazy" attribute, doesn't remove anything
+  // --- 5. Start observing for script injection ---
+  if (document.documentElement) {
+    scriptObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // --- 6. Lazy-load far off-screen images ---
   setInterval(() => {
     document.querySelectorAll('img[src]:not([loading])').forEach(img => {
       const rect = img.getBoundingClientRect();
