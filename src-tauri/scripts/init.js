@@ -1,50 +1,59 @@
 (function() {
   'use strict';
 
-  // --- CSS: drag region + titlebar padding + native feel ---
+  // --- CSS: native macOS look ---
   const style = document.createElement('style');
   style.textContent = `
     html, body {
       background: #030303 !important;
     }
     body {
-      padding-top: 48px !important;
+      padding-top: 38px !important;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    /* Allow text selection in content areas */
+    ytmusic-player-bar, .content, .description, .subtitle,
+    input, textarea, [contenteditable] {
+      -webkit-user-select: text;
+      user-select: text;
     }
     #layout { padding-top: 0 !important; }
     ytmusic-app-layout > [slot="player-bar"] { z-index: 999; }
     body { touch-action: pan-x pan-y; }
 
-    /* Drag region — acts as native titlebar */
+    /* Drag region — transparent bar at top for window dragging */
     #yt-music-drag-region {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
-      height: 48px;
-      -webkit-app-region: drag;
+      height: 38px;
       z-index: 10000;
-      pointer-events: auto;
+      -webkit-app-region: drag;
     }
 
-    /* Make buttons/links inside the header area clickable (no-drag) */
-    #yt-music-drag-region .no-drag,
+    /* All interactive elements inside header are no-drag */
     ytmusic-pivot-bar-renderer,
     ytmusic-search-box,
+    #right-content,
+    #left-content ytmusic-pivot-bar-renderer,
     tp-yt-paper-icon-button,
     a, button, input, select, textarea,
     [role="button"], [role="link"], [role="tab"],
-    ytmusic-pivot-bar-item-renderer {
+    ytmusic-pivot-bar-item-renderer,
+    #guide-button, #search-button,
+    .search-container,
+    ytmusic-settings-button {
       -webkit-app-region: no-drag;
     }
 
-    /* Hide the native YT Music title/header background for cleaner look */
-    ytmusic-nav-bar#nav-bar-background {
-      background: transparent !important;
-    }
+    /* Smooth scrolling */
+    * { scroll-behavior: smooth; }
   `;
   document.head.appendChild(style);
 
-  // --- Create drag region element ---
+  // --- Create drag region ---
   function createDragRegion() {
     if (document.getElementById('yt-music-drag-region')) return;
     const drag = document.createElement('div');
@@ -52,26 +61,31 @@
     document.body.prepend(drag);
   }
 
-  if (document.body) {
-    createDragRegion();
-  } else {
-    document.addEventListener('DOMContentLoaded', createDragRegion);
-  }
+  if (document.body) createDragRegion();
+  else document.addEventListener('DOMContentLoaded', createDragRegion);
 
-  // --- Disable zoom gestures (Cmd+scroll) ---
-  document.addEventListener('wheel', function(e) {
+  // --- Disable zoom gestures ---
+  document.addEventListener('wheel', (e) => {
     if (e.ctrlKey || e.metaKey) e.preventDefault();
   }, { passive: false });
 
-  // --- Ad blocking: remove ad elements ---
+  // Disable Cmd+Plus/Minus zoom
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '-' || e.key === '+')) {
+      e.preventDefault();
+    }
+  });
+
+  // --- Ad blocking ---
   const adSelectors = [
     'ytmusic-you-there-renderer',
     'tp-yt-paper-dialog:has(yt-mealbar-promo-renderer)',
     '.ytmusic-mealbar-promo-renderer',
-    'ytmusic-popup-container',
+    'tp-yt-paper-dialog.ytmusic-popup-container',
     '#masthead-ad',
     '.ad-showing video',
-    'tp-yt-paper-dialog.ytmusic-popup-container',
+    '.ytp-ad-overlay-container',
+    '.ytp-ad-text-overlay',
   ];
 
   function removeAds() {
@@ -83,24 +97,25 @@
       video.currentTime = video.duration || 0;
       video.playbackRate = 16;
     }
-    // Auto-dismiss "Are you still watching?"
+    // Auto-dismiss popups
     const confirmBtn = document.querySelector(
       'ytmusic-you-there-renderer tp-yt-paper-button, ' +
-      'yt-button-renderer.style-blue-text[dialog-confirm]'
+      'yt-button-renderer.style-blue-text[dialog-confirm], ' +
+      'tp-yt-paper-dialog .yt-spec-button-shape-next--filled'
     );
     if (confirmBtn) confirmBtn.click();
   }
 
-  const observer = new MutationObserver(removeAds);
+  const obs = new MutationObserver(removeAds);
   if (document.body) {
-    observer.observe(document.body, { childList: true, subtree: true });
+    obs.observe(document.body, { childList: true, subtree: true });
   } else {
     document.addEventListener('DOMContentLoaded', () => {
-      observer.observe(document.body, { childList: true, subtree: true });
+      obs.observe(document.body, { childList: true, subtree: true });
     });
   }
 
-  // --- Media info: send to Rust via Tauri IPC ---
+  // --- Media info → Rust ---
   let lastState = '';
 
   function sendMediaInfo() {
@@ -127,6 +142,7 @@
       new MutationObserver(sendMediaInfo).observe(playerBar, {
         childList: true, subtree: true, attributes: true, characterData: true
       });
+      sendMediaInfo();
     } else {
       setTimeout(watchPlayerBar, 1000);
     }
@@ -134,7 +150,7 @@
   watchPlayerBar();
   setInterval(sendMediaInfo, 3000);
 
-  // --- Media controls from Rust (play/pause/next/prev) ---
+  // --- Media controls from Rust ---
   function setupMediaControls() {
     if (!window.__TAURI__?.event) {
       setTimeout(setupMediaControls, 500);

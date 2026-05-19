@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(deprecated)]
 
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
 
 mod media;
 
@@ -26,7 +27,7 @@ const ALLOWED_DOMAINS: &[&str] = &[
     "accounts.google.com",
     "accounts.youtube.com",
     "consent.youtube.com",
-    "www.google.com/recaptcha",
+    "www.google.com",
     "www.gstatic.com",
 ];
 
@@ -50,7 +51,7 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            let _window = WebviewWindowBuilder::new(
+            let window = WebviewWindowBuilder::new(
                 app,
                 "main",
                 WebviewUrl::External("https://music.youtube.com".parse().unwrap()),
@@ -59,7 +60,9 @@ fn main() {
             .inner_size(1280.0, 800.0)
             .min_inner_size(600.0, 400.0)
             .center()
-            .visible(false) // hidden until state restored by plugin
+            .hidden_title(true)
+            .title_bar_style(TitleBarStyle::Transparent)
+            .visible(false)
             .user_agent(USER_AGENT)
             .initialization_script(INIT_SCRIPT)
             .on_navigation(|url| {
@@ -71,10 +74,20 @@ fn main() {
             })
             .build()?;
 
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::TitleBarStyle;
-                _window.set_title_bar_style(TitleBarStyle::Overlay).ok();
+            // Set native dark background color (#030303) via cocoa
+            use cocoa::appkit::{NSColor, NSWindow};
+            use cocoa::base::{id, nil};
+
+            let ns_window = window.ns_window().unwrap() as id;
+            unsafe {
+                let bg_color = NSColor::colorWithRed_green_blue_alpha_(
+                    nil,
+                    3.0 / 255.0,
+                    3.0 / 255.0,
+                    3.0 / 255.0,
+                    1.0,
+                );
+                ns_window.setBackgroundColor_(bg_color);
             }
 
             media::init(handle);
