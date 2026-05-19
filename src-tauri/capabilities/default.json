@@ -6,6 +6,9 @@
     "urls": ["https://music.youtube.com/*"]
   },
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:default",
+    "core:webview:default",
+    "window-state:default"
   ]
 }

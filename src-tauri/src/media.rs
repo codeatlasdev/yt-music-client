@@ -1,9 +1,10 @@
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Runtime};
 
 static CONTROLS: Mutex<Option<MediaControls>> = Mutex::new(None);
 
-pub fn init() {
+pub fn init<R: Runtime>(handle: AppHandle<R>) {
     let config = PlatformConfig {
         dbus_name: "yt_music",
         display_name: "YouTube Music",
@@ -12,14 +13,16 @@ pub fn init() {
 
     if let Ok(mut controls) = MediaControls::new(config) {
         controls
-            .attach(|event: MediaControlEvent| {
-                match event {
-                    MediaControlEvent::Play => {}
-                    MediaControlEvent::Pause => {}
-                    MediaControlEvent::Next => {}
-                    MediaControlEvent::Previous => {}
-                    _ => {}
-                }
+            .attach(move |event: MediaControlEvent| {
+                let action = match event {
+                    MediaControlEvent::Play => "play",
+                    MediaControlEvent::Pause => "pause",
+                    MediaControlEvent::Toggle => "toggle",
+                    MediaControlEvent::Next => "next",
+                    MediaControlEvent::Previous => "previous",
+                    _ => return,
+                };
+                handle.emit("media-control", action).ok();
             })
             .ok();
         *CONTROLS.lock().unwrap() = Some(controls);

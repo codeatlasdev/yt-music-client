@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::WebviewUrl;
-use tauri::WebviewWindowBuilder;
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 mod media;
 
@@ -22,8 +21,21 @@ const AD_DOMAINS: &[&str] = &[
     "ads.youtube.com",
 ];
 
+const ALLOWED_DOMAINS: &[&str] = &[
+    "music.youtube.com",
+    "accounts.google.com",
+    "accounts.youtube.com",
+    "consent.youtube.com",
+    "www.google.com/recaptcha",
+    "www.gstatic.com",
+];
+
 fn is_ad_url(url: &str) -> bool {
     AD_DOMAINS.iter().any(|domain| url.contains(domain))
+}
+
+fn is_allowed_url(url: &str) -> bool {
+    ALLOWED_DOMAINS.iter().any(|domain| url.contains(domain))
 }
 
 #[tauri::command]
@@ -33,9 +45,12 @@ fn update_media(title: String, artist: String, is_playing: bool) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![update_media])
         .setup(|app| {
-            let window = WebviewWindowBuilder::new(
+            let handle = app.handle().clone();
+
+            let _window = WebviewWindowBuilder::new(
                 app,
                 "main",
                 WebviewUrl::External("https://music.youtube.com".parse().unwrap()),
@@ -44,18 +59,25 @@ fn main() {
             .inner_size(1280.0, 800.0)
             .min_inner_size(600.0, 400.0)
             .center()
+            .visible(false) // hidden until state restored by plugin
             .user_agent(USER_AGENT)
             .initialization_script(INIT_SCRIPT)
-            .on_navigation(|url| !is_ad_url(url.as_str()))
+            .on_navigation(|url| {
+                let s = url.as_str();
+                if is_ad_url(s) {
+                    return false;
+                }
+                is_allowed_url(s)
+            })
             .build()?;
 
             #[cfg(target_os = "macos")]
             {
                 use tauri::TitleBarStyle;
-                window.set_title_bar_style(TitleBarStyle::Overlay).ok();
+                _window.set_title_bar_style(TitleBarStyle::Overlay).ok();
             }
 
-            media::init();
+            media::init(handle);
 
             Ok(())
         })
