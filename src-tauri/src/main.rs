@@ -87,10 +87,7 @@ fn main() {
             .initialization_script(PLUGINS_SCRIPT)
             .on_navigation(|url| {
                 let s = url.as_str();
-                if is_ad_url(s) {
-                    return false;
-                }
-                is_allowed_url(s)
+                !is_ad_url(s)
             })
             .build()?;
 
