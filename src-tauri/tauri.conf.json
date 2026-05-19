@@ -1,0 +1,39 @@
+{
+  "productName": "YT Music",
+  "version": "0.1.0",
+  "identifier": "dev.codeatlas.yt-music",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "YouTube Music",
+        "url": "https://music.youtube.com",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 600,
+        "minHeight": 400,
+        "titleBarStyle": "overlay",
+        "hiddenTitle": true,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
+  },
+  "plugins": {}
+}
