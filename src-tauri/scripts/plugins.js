@@ -2,68 +2,14 @@
   'use strict';
 
   // ==========================================================
-  // PLUGIN: Crossfade
-  // Smooth transition between songs (fade out current, fade in next)
+  // PLUGIN: Crossfade — DISABLED
+  // Was interfering with YouTube Music's internal volume/playback control
   // ==========================================================
-  (function crossfade() {
-    const FADE_DURATION = 3; // seconds
-    let isFading = false;
-
-    function setupCrossfade() {
-      const video = document.querySelector('video');
-      if (!video) { setTimeout(setupCrossfade, 1000); return; }
-
-      video.addEventListener('timeupdate', () => {
-        if (isFading) return;
-        if (video.duration && video.currentTime > video.duration - FADE_DURATION) {
-          isFading = true;
-          const startVolume = video.volume;
-          const fadeInterval = setInterval(() => {
-            const remaining = video.duration - video.currentTime;
-            if (remaining <= 0) {
-              clearInterval(fadeInterval);
-              video.volume = startVolume;
-              isFading = false;
-              return;
-            }
-            video.volume = startVolume * (remaining / FADE_DURATION);
-          }, 50);
-        }
-      });
-
-      // Restore volume on new song
-      const observer = new MutationObserver(() => {
-        if (!isFading) video.volume = 1;
-      });
-      const titleEl = document.querySelector('.title.ytmusic-player-bar');
-      if (titleEl) observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
-    }
-    setupCrossfade();
-  })();
 
   // ==========================================================
-  // PLUGIN: Exponential Volume
-  // Makes volume slider feel more natural (logarithmic curve)
+  // PLUGIN: Exponential Volume — DISABLED
+  // Was interfering with YouTube Music's internal volume control
   // ==========================================================
-  (function exponentialVolume() {
-    function setup() {
-      const video = document.querySelector('video');
-      const slider = document.querySelector('#volume-slider');
-      if (!video || !slider) { setTimeout(setup, 1000); return; }
-
-      // Override the volume slider behavior
-      const originalDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume');
-      let rawVolume = 1;
-
-      slider.addEventListener('input', () => {
-        const linear = slider.value / 100;
-        // Apply exponential curve: x^3 gives a more natural feel
-        const exponential = Math.pow(linear, 3);
-        video.volume = exponential;
-      });
-    }
-    setup();
-  })();
 
   // ==========================================================
   // PLUGIN: Skip Silences — DISABLED
