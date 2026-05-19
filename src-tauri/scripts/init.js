@@ -1,21 +1,62 @@
 (function() {
   'use strict';
 
-  // --- CSS: titlebar padding + dark background while loading ---
+  // --- CSS: drag region + titlebar padding + native feel ---
   const style = document.createElement('style');
   style.textContent = `
     html, body {
       background: #030303 !important;
     }
     body {
-      padding-top: 28px !important;
+      padding-top: 48px !important;
     }
     #layout { padding-top: 0 !important; }
     ytmusic-app-layout > [slot="player-bar"] { z-index: 999; }
-    /* Disable pinch-to-zoom */
     body { touch-action: pan-x pan-y; }
+
+    /* Drag region — acts as native titlebar */
+    #yt-music-drag-region {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      -webkit-app-region: drag;
+      z-index: 10000;
+      pointer-events: auto;
+    }
+
+    /* Make buttons/links inside the header area clickable (no-drag) */
+    #yt-music-drag-region .no-drag,
+    ytmusic-pivot-bar-renderer,
+    ytmusic-search-box,
+    tp-yt-paper-icon-button,
+    a, button, input, select, textarea,
+    [role="button"], [role="link"], [role="tab"],
+    ytmusic-pivot-bar-item-renderer {
+      -webkit-app-region: no-drag;
+    }
+
+    /* Hide the native YT Music title/header background for cleaner look */
+    ytmusic-nav-bar#nav-bar-background {
+      background: transparent !important;
+    }
   `;
   document.head.appendChild(style);
+
+  // --- Create drag region element ---
+  function createDragRegion() {
+    if (document.getElementById('yt-music-drag-region')) return;
+    const drag = document.createElement('div');
+    drag.id = 'yt-music-drag-region';
+    document.body.prepend(drag);
+  }
+
+  if (document.body) {
+    createDragRegion();
+  } else {
+    document.addEventListener('DOMContentLoaded', createDragRegion);
+  }
 
   // --- Disable zoom gestures (Cmd+scroll) ---
   document.addEventListener('wheel', function(e) {
@@ -37,13 +78,12 @@
     for (const sel of adSelectors) {
       for (const el of document.querySelectorAll(sel)) el.remove();
     }
-    // Skip video ads instantly
     const video = document.querySelector('video');
     if (video && document.querySelector('.ad-showing')) {
       video.currentTime = video.duration || 0;
       video.playbackRate = 16;
     }
-    // Auto-dismiss "Are you still watching?" / "Still there?"
+    // Auto-dismiss "Are you still watching?"
     const confirmBtn = document.querySelector(
       'ytmusic-you-there-renderer tp-yt-paper-button, ' +
       'yt-button-renderer.style-blue-text[dialog-confirm]'
@@ -81,7 +121,6 @@
     }
   }
 
-  // Use MutationObserver on player bar for instant updates, fallback to interval
   function watchPlayerBar() {
     const playerBar = document.querySelector('ytmusic-player-bar');
     if (playerBar) {
@@ -93,7 +132,7 @@
     }
   }
   watchPlayerBar();
-  setInterval(sendMediaInfo, 3000); // fallback
+  setInterval(sendMediaInfo, 3000);
 
   // --- Media controls from Rust (play/pause/next/prev) ---
   function setupMediaControls() {
@@ -102,7 +141,6 @@
       return;
     }
     window.__TAURI__.event.listen('media-control', (event) => {
-      const video = document.querySelector('video');
       const playBtn = document.querySelector('#play-pause-button');
       const nextBtn = document.querySelector('.next-button');
       const prevBtn = document.querySelector('.previous-button');
