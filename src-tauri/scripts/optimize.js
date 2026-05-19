@@ -5,49 +5,9 @@
   // SAFE PERFORMANCE OPTIMIZATIONS
   // ==========================================================
 
-  // --- 1. Block telemetry, analytics, and unnecessary scripts ---
-  const BLOCKED_URLS = [
-    '/api/stats/ads',
-    '/ptracking',
-    '/youtubei/v1/log_event',
-    '/youtubei/v1/feedback',
-    '/youtubei/v1/att/get',
-    'play.google.com/log',
-    'jnn-pa.googleapis.com',
-    'www.google-analytics.com',
-    'www.googletagmanager.com',
-    'googleads.g.doubleclick.net',
-    'static.doubleclick.net',
-    'pagead2.googlesyndication.com',
-    '/generate_204',
-    '/api/stats/qoe',
-    '/api/stats/atr',
-    // Cast/Remote
-    'www.gstatic.com/cast',
-    'www.gstatic.com/eureka',
-    // SW
-    '/sw.js_data',
-  ];
-
-  const originalFetch = window.fetch;
-  window.fetch = function(url, ...args) {
-    const urlStr = typeof url === 'string' ? url : url?.url || '';
-    if (BLOCKED_URLS.some(s => urlStr.includes(s))) {
-      return Promise.resolve(new Response('{}', { status: 200 }));
-    }
-    return originalFetch.call(this, url, ...args);
-  };
-
-  const originalXHROpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url, ...args) {
-    this._blocked = BLOCKED_URLS.some(s => String(url).includes(s));
-    return originalXHROpen.call(this, method, url, ...args);
-  };
-  const originalXHRSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function(...args) {
-    if (this._blocked) return;
-    return originalXHRSend.call(this, ...args);
-  };
+  // --- 1. Block telemetry (CSS/DOM only, no fetch interception) ---
+  // NOTE: fetch/XHR interception removed — it was causing playback stalls.
+  // Ad blocking is handled by on_navigation (Rust) + DOM removal (init.js).
 
   // Block script elements loading unnecessary resources
   const scriptObserver = new MutationObserver((mutations) => {

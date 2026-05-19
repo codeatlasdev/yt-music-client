@@ -66,59 +66,9 @@
   })();
 
   // ==========================================================
-  // PLUGIN: Skip Silences
-  // Detects silence at start/end of tracks and skips it
+  // PLUGIN: Skip Silences — DISABLED
+  // createMediaElementSource can interfere with streaming
   // ==========================================================
-  (function skipSilences() {
-    const SILENCE_THRESHOLD = 0.01;
-    const CHECK_INTERVAL = 200; // ms
-    let audioContext, analyser, source, connected = false;
-
-    function setup() {
-      const video = document.querySelector('video');
-      if (!video) { setTimeout(setup, 1000); return; }
-
-      video.addEventListener('play', () => {
-        if (!connected) {
-          try {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
-            source = audioContext.createMediaElementSource(video);
-            source.connect(analyser);
-            analyser.connect(audioContext.destination);
-            connected = true;
-          } catch(e) { return; }
-        }
-      });
-
-      // Check for silence at the beginning of tracks
-      let lastTitle = '';
-      setInterval(() => {
-        if (!analyser || !connected) return;
-        const titleEl = document.querySelector('.title.ytmusic-player-bar');
-        const currentTitle = titleEl?.textContent?.trim() || '';
-        
-        // Only skip silence at the start of a new song
-        if (currentTitle !== lastTitle && currentTitle) {
-          lastTitle = currentTitle;
-          skipInitialSilence(video);
-        }
-      }, 500);
-    }
-
-    function skipInitialSilence(video) {
-      if (video.currentTime > 2) return; // Only check first 2 seconds
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      analyser.getByteFrequencyData(data);
-      const avg = data.reduce((a, b) => a + b, 0) / data.length / 255;
-      if (avg < SILENCE_THRESHOLD && video.currentTime < 2) {
-        video.currentTime += 0.1;
-        setTimeout(() => skipInitialSilence(video), 50);
-      }
-    }
-    setup();
-  })();
 
   // ==========================================================
   // PLUGIN: Skip Disliked Songs
