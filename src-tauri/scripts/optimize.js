@@ -129,4 +129,49 @@
       }
     });
   }, 5000);
+
+  // --- 7. Memory management — prevent RAM growth over time ---
+  let navigationCount = 0;
+
+  function memoryCleanup() {
+    // Release image blobs that are far off-screen
+    document.querySelectorAll('img[src^="blob:"]').forEach(img => {
+      const rect = img.getBoundingClientRect();
+      if (rect.bottom < -2000 || rect.top > window.innerHeight + 3000) {
+        URL.revokeObjectURL(img.src);
+        img.removeAttribute('src');
+        img.setAttribute('loading', 'lazy');
+      }
+    });
+
+    // Clear old canvas elements (visualizers, etc)
+    document.querySelectorAll('canvas').forEach(canvas => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.bottom < -1000 || rect.top > window.innerHeight + 2000) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    });
+
+    // Hint GC after navigation
+    if (window.gc) window.gc();
+  }
+
+  // Track SPA navigations and clean up after each
+  function watchNavigations() {
+    const originalPushState = history.pushState;
+    history.pushState = function(...args) {
+      originalPushState.apply(this, args);
+      navigationCount++;
+      // Clean up every 3 navigations
+      if (navigationCount % 3 === 0) {
+        setTimeout(memoryCleanup, 2000);
+      }
+    };
+  }
+  watchNavigations();
+
+  // Periodic cleanup every 5 minutes
+  setInterval(memoryCleanup, 300000);
+
 })();
