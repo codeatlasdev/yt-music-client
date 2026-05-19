@@ -88,24 +88,10 @@
   // AD BLOCKING — complete removal
   // ==========================================================
 
-  // 1. Skip video ads instantly
+  // 1. Skip video ads — only click skip button, don't touch video element
   function skipAds() {
-    const player = document.querySelector('#movie_player');
-    const video = document.querySelector('video');
-
-    // If ad is playing, skip it
-    if (document.querySelector('.ad-showing') || player?.classList.contains('ad-showing')) {
-      if (video) {
-        video.currentTime = 9999;
-        video.playbackRate = 16;
-      }
-      // Click skip button if available
-      const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
-      if (skipBtn) skipBtn.click();
-    }
-
-    // Remove ad overlays
-    document.querySelectorAll('.ytp-ad-overlay-container, .ytp-ad-text-overlay').forEach(el => el.remove());
+    const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
+    if (skipBtn) skipBtn.click();
   }
 
   // 2. Remove promotional banners and popups
