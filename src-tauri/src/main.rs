@@ -8,6 +8,10 @@ mod media;
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 const INIT_SCRIPT: &str = include_str!("../scripts/init.js");
+const OPTIMIZE_SCRIPT: &str = include_str!("../scripts/optimize.js");
+
+#[cfg(debug_assertions)]
+const PERF_MONITOR: &str = include_str!("../scripts/perf-monitor.js");
 
 const AD_DOMAINS: &[&str] = &[
     "doubleclick.net",
@@ -65,6 +69,7 @@ fn main() {
             .visible(false)
             .user_agent(USER_AGENT)
             .initialization_script(INIT_SCRIPT)
+            .initialization_script(OPTIMIZE_SCRIPT)
             .on_navigation(|url| {
                 let s = url.as_str();
                 if is_ad_url(s) {
@@ -91,6 +96,16 @@ fn main() {
             }
 
             media::init(handle);
+
+            // Debug: inject performance monitor
+            #[cfg(debug_assertions)]
+            {
+                let w = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    w.eval(PERF_MONITOR).ok();
+                });
+            }
 
             Ok(())
         })
