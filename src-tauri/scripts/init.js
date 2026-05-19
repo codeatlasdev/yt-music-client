@@ -12,7 +12,6 @@
       -webkit-user-select: none;
       user-select: none;
     }
-    /* Allow text selection in content areas */
     ytmusic-player-bar, .content, .description, .subtitle,
     input, textarea, [contenteditable] {
       -webkit-user-select: text;
@@ -22,7 +21,7 @@
     ytmusic-app-layout > [slot="player-bar"] { z-index: 999; }
     body { touch-action: pan-x pan-y; }
 
-    /* Drag region — transparent bar at top for window dragging */
+    /* Drag region */
     #yt-music-drag-region {
       position: fixed;
       top: 0;
@@ -33,91 +32,181 @@
       -webkit-app-region: drag;
     }
 
-    /* All interactive elements inside header are no-drag */
+    /* No-drag on interactive elements */
     ytmusic-pivot-bar-renderer,
     ytmusic-search-box,
     #right-content,
-    #left-content ytmusic-pivot-bar-renderer,
     tp-yt-paper-icon-button,
     a, button, input, select, textarea,
     [role="button"], [role="link"], [role="tab"],
     ytmusic-pivot-bar-item-renderer,
-    #guide-button, #search-button,
     .search-container,
     ytmusic-settings-button {
       -webkit-app-region: no-drag;
     }
 
-    /* Smooth scrolling */
+    /* Hide ad-related elements */
+    ytmusic-you-there-renderer,
+    .ytmusic-mealbar-promo-renderer,
+    tp-yt-paper-dialog:has(yt-mealbar-promo-renderer),
+    #masthead-ad,
+    .ytp-ad-overlay-container,
+    .ytp-ad-text-overlay,
+    .ytp-ad-skip-button-container,
+    ytmusic-statement-banner-renderer,
+    ytmusic-mealbar-promo-renderer,
+    .ytmusic-popup-container:has(.promo),
+    .ad-showing .ytp-ad-player-overlay {
+      display: none !important;
+    }
+
     * { scroll-behavior: smooth; }
   `;
   document.head.appendChild(style);
 
-  // --- Create drag region ---
+  // --- Drag region ---
   function createDragRegion() {
     if (document.getElementById('yt-music-drag-region')) return;
     const drag = document.createElement('div');
     drag.id = 'yt-music-drag-region';
     document.body.prepend(drag);
   }
-
   if (document.body) createDragRegion();
   else document.addEventListener('DOMContentLoaded', createDragRegion);
 
-  // --- Disable zoom gestures ---
+  // --- Disable zoom ---
   document.addEventListener('wheel', (e) => {
     if (e.ctrlKey || e.metaKey) e.preventDefault();
   }, { passive: false });
-
-  // Disable Cmd+Plus/Minus zoom
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '-' || e.key === '+')) {
       e.preventDefault();
     }
   });
 
-  // --- Ad blocking ---
-  const adSelectors = [
-    'ytmusic-you-there-renderer',
-    'tp-yt-paper-dialog:has(yt-mealbar-promo-renderer)',
-    '.ytmusic-mealbar-promo-renderer',
-    'tp-yt-paper-dialog.ytmusic-popup-container',
-    '#masthead-ad',
-    '.ad-showing video',
-    '.ytp-ad-overlay-container',
-    '.ytp-ad-text-overlay',
-  ];
+  // ==========================================================
+  // AD BLOCKING — complete removal
+  // ==========================================================
 
-  function removeAds() {
-    for (const sel of adSelectors) {
-      for (const el of document.querySelectorAll(sel)) el.remove();
-    }
+  // 1. Skip video ads instantly
+  function skipAds() {
+    const player = document.querySelector('#movie_player');
     const video = document.querySelector('video');
-    if (video && document.querySelector('.ad-showing')) {
-      video.currentTime = video.duration || 0;
-      video.playbackRate = 16;
+
+    // If ad is playing, skip it
+    if (document.querySelector('.ad-showing') || player?.classList.contains('ad-showing')) {
+      if (video) {
+        video.currentTime = 9999;
+        video.playbackRate = 16;
+      }
+      // Click skip button if available
+      const skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
+      if (skipBtn) skipBtn.click();
     }
-    // Auto-dismiss popups
+
+    // Remove ad overlays
+    document.querySelectorAll('.ytp-ad-overlay-container, .ytp-ad-text-overlay').forEach(el => el.remove());
+  }
+
+  // 2. Remove promotional banners and popups
+  function removePromos() {
+    const promoSelectors = [
+      'ytmusic-you-there-renderer',
+      'ytmusic-mealbar-promo-renderer',
+      'tp-yt-paper-dialog:has(yt-mealbar-promo-renderer)',
+      'ytmusic-statement-banner-renderer',
+      'tp-yt-paper-dialog.ytmusic-popup-container',
+      'ytmusic-enforcement-message-renderer',
+    ];
+    for (const sel of promoSelectors) {
+      document.querySelectorAll(sel).forEach(el => el.remove());
+    }
+
+    // Auto-dismiss "Are you still watching?" / "Still there?"
     const confirmBtn = document.querySelector(
       'ytmusic-you-there-renderer tp-yt-paper-button, ' +
-      'yt-button-renderer.style-blue-text[dialog-confirm], ' +
-      'tp-yt-paper-dialog .yt-spec-button-shape-next--filled'
+      'yt-button-renderer[dialog-confirm], ' +
+      '.yt-spec-button-shape-next--filled[aria-label]'
     );
     if (confirmBtn) confirmBtn.click();
   }
 
-  const obs = new MutationObserver(removeAds);
+  // 3. Observe DOM for ads
+  const adObserver = new MutationObserver(() => {
+    skipAds();
+    removePromos();
+  });
   if (document.body) {
-    obs.observe(document.body, { childList: true, subtree: true });
+    adObserver.observe(document.body, { childList: true, subtree: true });
   } else {
     document.addEventListener('DOMContentLoaded', () => {
-      obs.observe(document.body, { childList: true, subtree: true });
+      adObserver.observe(document.body, { childList: true, subtree: true });
     });
   }
 
-  // --- Media info → Rust ---
-  let lastState = '';
+  // ==========================================================
+  // HIGH QUALITY AUDIO — force 256kbps AAC
+  // ==========================================================
 
+  function forceHighQuality() {
+    const player = document.querySelector('#movie_player');
+    if (!player) return;
+
+    // Use internal API to set quality to highest available
+    if (player.setPlaybackQualityRange) {
+      player.setPlaybackQualityRange('hd1080', 'hd1080');
+    }
+
+    // Access the audio quality setting via YouTube Music's internal config
+    // The player uses adaptive streaming — we want the highest audio bitrate
+    if (player.getAvailableQualityLevels) {
+      const levels = player.getAvailableQualityLevels();
+      if (levels.length > 0) {
+        player.setPlaybackQualityRange(levels[0], levels[0]);
+      }
+    }
+  }
+
+  // Force high quality on every new song
+  function watchForNewSongs() {
+    const playerBar = document.querySelector('ytmusic-player-bar');
+    if (playerBar) {
+      new MutationObserver(() => {
+        setTimeout(forceHighQuality, 500);
+      }).observe(playerBar, { childList: true, subtree: true });
+    } else {
+      setTimeout(watchForNewSongs, 1000);
+    }
+  }
+
+  // Also intercept the player config to force high quality
+  // YouTube Music uses `yt.config_` for player settings
+  function patchPlayerConfig() {
+    // Override the audio quality preference in localStorage
+    try {
+      const prefs = JSON.parse(localStorage.getItem('yt-player-quality') || '{}');
+      prefs.data = JSON.stringify({ quality: 'hd1080', previousQuality: 'hd1080' });
+      localStorage.setItem('yt-player-quality', JSON.stringify(prefs));
+    } catch(e) {}
+
+    // Set the streaming quality cookie/preference
+    try {
+      const config = document.querySelector('ytmusic-app')?.playerApi_;
+      if (config?.setPlaybackQualityRange) {
+        config.setPlaybackQualityRange('hd1080', 'hd1080');
+      }
+    } catch(e) {}
+  }
+
+  setTimeout(forceHighQuality, 3000);
+  setTimeout(patchPlayerConfig, 4000);
+  watchForNewSongs();
+
+  // ==========================================================
+  // MEDIA INFO → Rust
+  // ==========================================================
+
+  let lastState = '';
   function sendMediaInfo() {
     const titleEl = document.querySelector('.title.ytmusic-player-bar');
     const artistEl = document.querySelector('.byline.ytmusic-player-bar a, .byline.ytmusic-player-bar span');

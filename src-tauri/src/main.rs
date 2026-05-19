@@ -24,6 +24,16 @@ const AD_DOMAINS: &[&str] = &[
     "static.doubleclick.net",
     "ad.youtube.com",
     "ads.youtube.com",
+    "youtube.com/ptracking",
+    "youtube.com/api/stats/watchtime",
+    "youtube.com/api/stats/playback",
+    "youtube.com/generate_204",
+    "play.google.com/log",
+    "jnn-pa.googleapis.com",
+    "pagead2.googlesyndication.com",
+    "www.google-analytics.com",
+    "www.googletagmanager.com",
+    "yt3.ggpht.com/generate_204",
 ];
 
 const ALLOWED_DOMAINS: &[&str] = &[
