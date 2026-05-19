@@ -9,20 +9,7 @@
     "security": {
       "csp": null
     },
-    "windows": [
-      {
-        "label": "main",
-        "title": "YouTube Music",
-        "url": "https://music.youtube.com",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 600,
-        "minHeight": 400,
-        "titleBarStyle": "overlay",
-        "hiddenTitle": true,
-        "center": true
-      }
-    ]
+    "windows": []
   },
   "bundle": {
     "active": true,

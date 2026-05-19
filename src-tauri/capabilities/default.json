@@ -2,6 +2,9 @@
   "identifier": "default",
   "description": "Default capability for the main window",
   "windows": ["main"],
+  "remote": {
+    "urls": ["https://music.youtube.com/*"]
+  },
   "permissions": [
     "core:default"
   ]
