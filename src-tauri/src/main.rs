@@ -10,6 +10,7 @@ const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 
 const INIT_SCRIPT: &str = include_str!("../scripts/init.js");
 const OPTIMIZE_SCRIPT: &str = include_str!("../scripts/optimize.js");
+const PLUGINS_SCRIPT: &str = include_str!("../scripts/plugins.js");
 
 #[cfg(debug_assertions)]
 const PERF_MONITOR: &str = include_str!("../scripts/perf-monitor.js");
@@ -83,6 +84,7 @@ fn main() {
             .user_agent(USER_AGENT)
             .initialization_script(INIT_SCRIPT)
             .initialization_script(OPTIMIZE_SCRIPT)
+            .initialization_script(PLUGINS_SCRIPT)
             .on_navigation(|url| {
                 let s = url.as_str();
                 if is_ad_url(s) {
